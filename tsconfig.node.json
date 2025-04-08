@@ -1,0 +1,16 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    // "noEmit": true, // Remove noEmit when using composite/references that need declaration files
+    "declaration": true, // Emit .d.ts files
+    "declarationMap": true, // Emit source maps for .d.ts files
+    "outDir": "dist/node", // Specify output directory for declaration files
+    "esModuleInterop": true // Ensure compatibility
+  },
+  "include": ["vite.config.ts"] // Specify files included in this specific config
+}
