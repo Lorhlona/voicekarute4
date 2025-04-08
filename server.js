@@ -3,26 +3,35 @@ import express from 'express';
 import cors from 'cors';
 import multer from 'multer';
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
-import fs from 'fs';
+import fs from 'fs/promises'; // Use promises version of fs
 import path from 'path';
 import { fileURLToPath } from 'url';
+import net from 'net'; // Import net module for port checking
 
 // --- 初期設定 ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = process.env.PORT || 3000;
+const DEFAULT_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000; // Default port
 
 // --- ディレクトリ作成 ---
 const transcriptsDir = path.join(__dirname, 'transcripts');
 const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(transcriptsDir)) {
-    fs.mkdirSync(transcriptsDir, { recursive: true }); // recursive: true を追加
-}
-if (!fs.existsSync(uploadsDir)) {
-    fs.mkdirSync(uploadsDir, { recursive: true }); // recursive: true を追加
-}
+
+// 非同期でディレクトリ作成 (起動時に実行)
+const ensureDirectoryExists = async (dirPath) => {
+    try {
+        await fs.mkdir(dirPath, { recursive: true });
+        console.log(`Directory ensured: ${dirPath}`);
+    } catch (error) {
+        console.error(`Error ensuring directory ${dirPath}:`, error);
+    }
+};
+// Call these functions at startup
+ensureDirectoryExists(transcriptsDir);
+ensureDirectoryExists(uploadsDir);
+
 
 // --- API キー管理 ---
 // サーバー側でAPIキーを保持する変数 (サーバー再起動でリセットされる)
@@ -83,6 +92,14 @@ app.post('/api/set-api-key', (req, res) => {
     }
 });
 
+// APIキー削除エンドポイント
+app.post('/api/clear-api-key', (req, res) => {
+    serverApiKey = null;
+    genAIInstance = null;
+    console.log("API Key has been cleared from the server.");
+    res.status(200).json({ message: 'API Key cleared successfully.' });
+});
+
 // APIキーステータス確認エンドポイント (任意)
 app.get('/api/key-status', (req, res) => {
     try {
@@ -91,6 +108,47 @@ app.get('/api/key-status', (req, res) => {
     } catch (error) {
         console.error("Error in /api/key-status handler:", error);
         res.status(500).json({ error: "Internal server error checking key status." });
+    }
+});
+
+// 保存データクリアエンドポイント
+app.post('/api/clear-data', async (req, res) => {
+    console.log("[Clear Data] Received request to clear uploads and transcripts.");
+    try {
+        // Helper function to clear directory contents
+        const clearDirectory = async (dirPath) => {
+            try {
+                const files = await fs.readdir(dirPath);
+                for (const file of files) {
+                    const filePath = path.join(dirPath, file);
+                    try {
+                        await fs.unlink(filePath); // Delete file
+                        console.log(`[Clear Data] Deleted: ${filePath}`);
+                    } catch (unlinkError) {
+                        console.error(`[Clear Data] Error deleting file ${filePath}:`, unlinkError);
+                        // Continue trying to delete other files
+                    }
+                }
+            } catch (readError) {
+                if (readError.code === 'ENOENT') {
+                    console.log(`[Clear Data] Directory not found, nothing to clear: ${dirPath}`);
+                } else {
+                    console.error(`[Clear Data] Error reading directory ${dirPath}:`, readError);
+                    throw readError; // Re-throw other errors
+                }
+            }
+        };
+
+        // Clear both directories
+        await clearDirectory(uploadsDir);
+        await clearDirectory(transcriptsDir);
+
+        console.log("[Clear Data] Successfully cleared uploads and transcripts directories.");
+        res.status(200).json({ message: 'Uploads and transcripts cleared successfully.' });
+
+    } catch (error) {
+        console.error('[Clear Data] Error clearing data:', error);
+        res.status(500).json({ error: `Error clearing data: ${error.message}` });
     }
 });
 
@@ -107,7 +165,8 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
     if (!currentGenAI) {
          return res.status(503).json({ error: 'Gemini API client could not be initialized with the provided key.' });
     }
-    const currentTranscriptionModel = currentGenAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Use the unified model name
+    const currentTranscriptionModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
 
 
     if (!req.file) {
@@ -158,14 +217,18 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
         // If filePart wasn't created via File API (due to error or unavailability), use inlineData
         if (!filePart) {
             console.log("[Transcribe] Using inline data approach with base64 encoded audio...");
-            const fileBuffer = fs.readFileSync(filePath);
+            const fileBuffer = await fs.readFile(filePath); // Use async readFile
             const base64Audio = fileBuffer.toString('base64');
-            // Use the original mimeType from multer, or force a common one if needed
-            const apiMimeType = mimeType || 'audio/webm';
+            // Force audio MIME type even if detected as video
+            let apiMimeType = mimeType || 'audio/webm'; // Default to audio/webm
+            if (apiMimeType.startsWith('video/')) {
+                console.warn(`[Transcribe] Detected video MIME type (${apiMimeType}), forcing to audio/webm.`);
+                apiMimeType = 'audio/webm';
+            }
             console.log(`[Transcribe] Using MIME type for inlineData: ${apiMimeType}`);
             filePart = {
                 inlineData: {
-                    mimeType: apiMimeType,
+                    mimeType: apiMimeType, // Use potentially corrected MIME type
                     data: base64Audio
                 }
             };
@@ -220,23 +283,25 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
         const outputFilename = `${timestamp}-${path.parse(originalFilename).name}.txt`;
         const outputPath = path.join(transcriptsDir, outputFilename);
 
-        fs.writeFile(outputPath, transcript, (err) => {
-            if (err) {
-                console.error('[Transcribe] Error writing transcript file:', err);
-            } else {
-                console.log(`[Transcribe] Transcript saved to ${outputPath}`);
-            }
-            // 元の音声ファイルは uploadsDir に保存されているので、ここでは何もしない
-            // (Multerで保存済み、ファイル名はタイムスタンプ付き)
-            console.log(`[Transcribe] Original audio file preserved at: ${filePath}`);
+        try { // Use try-catch for async file write
+            await fs.writeFile(outputPath, transcript);
+            console.log(`[Transcribe] Transcript saved to ${outputPath}`);
+        } catch (err) {
+            console.error('[Transcribe] Error writing transcript file:', err);
+        }
+        // 元の音声ファイルは uploadsDir に保存されているので、ここでは何もしない
+        // (Multerで保存済み、ファイル名はタイムスタンプ付き)
+        console.log(`[Transcribe] Original audio file preserved at: ${filePath}`);
 
-            // ファイルAPIでアップロードした一時ファイルを削除 (任意)
-            // genAI.deleteFile(uploadedFile.name).then(() => {
-            //     console.log(`[Transcribe] Deleted temporary uploaded file: ${uploadedFile.name}`);
-            // }).catch(delErr => {
-            //     console.error(`[Transcribe] Error deleting temporary file ${uploadedFile.name}:`, delErr);
-            // });
-        });
+        // ファイルAPIでアップロードした一時ファイルを削除 (任意)
+        // if (uploadedFile && currentGenAI.files && typeof currentGenAI.files.delete === 'function') {
+        //     try {
+        //         await currentGenAI.files.delete(uploadedFile.name);
+        //         console.log(`[Transcribe] Deleted temporary uploaded file: ${uploadedFile.name}`);
+        //     } catch (delErr) {
+        //         console.error(`[Transcribe] Error deleting temporary file ${uploadedFile.name}:`, delErr);
+        //     }
+        // }
 
     } catch (error) {
         console.error('[Transcribe] Error during transcription process:', error);
@@ -258,25 +323,29 @@ app.post('/api/generate-karte', async (req, res) => {
      if (!currentGenAI) {
          return res.status(503).json({ error: 'Gemini API client could not be initialized with the provided key.' });
      }
-    const currentGenerationModel = currentGenAI.getGenerativeModel({ model: "gemini-1.5-pro" });
+     // Use the unified model name
+    const currentGenerationModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
 
-    const { transcriptText } = req.body; // フロントエンドからは文字起こしテキストを受け取る
+    // Receive combinedText and systemPrompt from the frontend
+    const { combinedText, systemPrompt } = req.body; // systemPrompt を受け取る
 
-    if (!transcriptText) {
-        return res.status(400).json({ error: 'Transcript text is required.' });
+    if (!combinedText) {
+        return res.status(400).json({ error: 'Combined text (transcript + supplementary info) is required.' });
+    }
+    if (!systemPrompt) { // systemPrompt のチェックを追加
+        console.warn('[Generate Karte] System prompt was not provided by the frontend.');
+        return res.status(400).json({ error: 'System prompt for the selected mode is required.' });
     }
 
-    console.log(`[Generate Karte] Received transcript text (length: ${transcriptText.length})`);
+    console.log(`[Generate Karte] Received combined text (length: ${combinedText.length})`);
+    console.log(`[Generate Karte] Using system prompt: ${systemPrompt.substring(0, 80)}...`); // 受け取った systemPrompt をログに出力
 
     try {
-        const systemPrompt = `
-あなたは経験豊富な医療専門家です。以下の患者との会話（文字起こしテキスト）を分析し、構造化された医療カルテ（SOAP形式など）を作成してください。
-重要な症状、診断の可能性、治療計画、患者の懸念事項などを正確に抽出・要約し、専門的かつ簡潔な言葉で記述してください。
-必要に応じて、追加で確認すべき事項やフォローアップの提案も含めてください。
-`;
-        const userPrompt = `以下の文字起こしテキストからカルテを作成してください:\n\n${transcriptText}`;
+        // Make the user prompt more generic, relying on the system prompt for specific instructions
+        const userPrompt = `以下のテキストを、システムプロンプトの指示に従って処理してください。ただし診療補助目的であり、あなたが勝手に医学的な治療方針を提案したりはしてはいけません。会話内容にある場合はそれをハルシネーションなく記載するように。あなたは記載することが仕事で医学的なアセスメントは話者の医者の方針に従ってください。もし以下のシステムプロンプトで治療方針提案するようなことがかかれていても、会話にでてきたものは記載していいが、あなたは提案はしていけません。:\n\n${combinedText}`;
+        // Alternative generic prompt: const userPrompt = combinedText; (Just send the text)
 
-        console.log("[Generate Karte] Generating karte...");
+        console.log("[Generate Karte] Generating output based on selected mode...");
 
         // Safety Settings の設定例 (必要に応じて調整)
         const safetySettings = [
@@ -286,10 +355,10 @@ app.post('/api/generate-karte', async (req, res) => {
             { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
         ];
 
-        // currentGenerationModel を使用
+        // currentGenerationModel を使用し、受け取った systemPrompt を systemInstruction に設定
         const result = await currentGenerationModel.generateContent({
             contents: [{ role: "user", parts: [{ text: userPrompt }] }],
-            systemInstruction: { role: "system", parts: [{ text: systemPrompt }] }, // systemInstruction を使用
+            systemInstruction: { role: "system", parts: [{ text: systemPrompt }] }, // 受け取った systemPrompt を使用
             safetySettings,
             // generationConfig: { // 必要に応じて温度などを設定
             //     temperature: 0.7,
@@ -329,11 +398,45 @@ app.post('/api/generate-karte', async (req, res) => {
 });
 
 
+// --- Port Availability Check ---
+// Function to check if a port is available
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = net.createServer();
+    server.once('error', (err) => {
+      resolve(err.code !== 'EADDRINUSE'); // Resolve true if error is NOT EADDRINUSE
+    });
+    server.once('listening', () => {
+      server.close(() => resolve(true)); // Port is available
+    });
+    server.listen(port, '127.0.0.1'); // Listen on localhost only for check
+  });
+}
+
+// Function to find an available port starting from a given port
+async function findAvailablePort(startPort, maxAttempts = 10) {
+  let port = startPort;
+  for (let i = 0; i < maxAttempts; i++) {
+    if (await isPortAvailable(port)) {
+      return port;
+    }
+    console.warn(`Port ${port} is in use, trying next port...`);
+    port++;
+  }
+  throw new Error(`Could not find an available port after ${maxAttempts} attempts starting from ${startPort}.`);
+}
+
 // --- サーバー起動 ---
-app.listen(port, () => {
-    console.log(`Backend server listening at http://localhost:${port}`);
-    // APIキーが .env から読み込まれなくなったため、起動時の警告は不要
-    // if (!serverApiKey) {
-    //     console.warn('Warning: Gemini API Key is not set. Use the /api/set-api-key endpoint.');
-    // }
-});
+// Start the server after finding an available port
+(async () => {
+  try {
+    const availablePort = await findAvailablePort(DEFAULT_PORT);
+    app.listen(availablePort, () => {
+      console.log(`Backend server listening at http://localhost:${availablePort}`);
+      // APIキーが .env から読み込まれなくなったため、起動時の警告は不要
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error.message);
+    process.exit(1); // Exit if server cannot start
+  }
+})();
