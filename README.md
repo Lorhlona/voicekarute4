@@ -33,10 +33,34 @@
 
 ### 1. 前提条件
 
-*   Node.js (v18 以上推奨) と npm がインストールされていること
-*   Google Gemini API キーを取得済みであること ([Google AI Studio](https://aistudio.google.com/) または Google Cloud Console から取得)
+*   **Node.js と npm:** [Node.js](https://nodejs.org/) (v18 以上推奨) と npm (通常 Node.js に同梱) がインストールされていること。
+*   **Google アカウント:** Google Gemini API を利用するために必要です。
+*   **Gemini API キー:** [Google AI Studio](https://aistudio.google.com/) に Google アカウントでログインし、「Get API key」からキーを生成・取得してください。
 
-### 2. インストール
+### 2. セットアップ
+
+#### A) Git リポジトリからクローンする場合 (推奨)
+
+1.  リポジトリをクローンします:
+    ```bash
+    git clone https://github.com/Lorhlona/voicekarute4.git
+    cd voicekarute4
+    ```
+2.  依存関係をインストールします:
+    ```bash
+    npm install
+    ```
+
+#### B) ZIP ファイルから展開する場合
+
+1.  ダウンロードした ZIP ファイルを展開します。
+2.  展開したフォルダにターミナル (コマンドプロンプト, PowerShell, Terminal など) で移動します。
+3.  依存関係をインストールします:
+    ```bash
+    npm install
+    ```
+
+### 3. 開発モードでの実行
 
 プロジェクトディレクトリで以下のコマンドを実行し、依存関係をインストールします。
 
@@ -53,6 +77,7 @@ npm run dev
 ```
 
 ターミナルに表示される Vite のローカルアドレス (通常 `http://localhost:5173/`) をブラウザで開きます。
+**注意:** 以前のバージョンとは異なり、`http://localhost:3000/` ではありません。`3000` 番ポートはバックエンド API サーバーが使用します。
 
 ### 4. API キーの設定
 
