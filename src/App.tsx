@@ -49,6 +49,8 @@ const LOCAL_STORAGE_KEY_API_KEY = 'voiceKarteApiKey'; // Key for storing API key
 
 function App() {
   // State variables
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Simple password gate
+  const [passwordInput, setPasswordInput] = useState('');
   // Load API key from localStorage on initial load
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(LOCAL_STORAGE_KEY_API_KEY) || '');
   const [isKeySet, setIsKeySet] = useState(false); // Track if API key is successfully set on backend
@@ -188,6 +190,25 @@ function App() {
   const handleEditingModeChange = (field: keyof KarteMode, value: string) => {
     if (!editingMode) return;
     setEditingMode(prev => prev ? { ...prev, [field]: value } : null);
+  };
+
+  const handlePasswordInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPasswordInput(e.target.value);
+  };
+
+  const handlePasswordKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handlePasswordSubmit();
+    }
+  };
+
+  // --- Simple Authentication ---
+  const handlePasswordSubmit = () => {
+    if (passwordInput === 'Puppy') {
+      setIsAuthenticated(true);
+    } else {
+      alert('パスワードが違います');
+    }
   };
 
   // TODO: Implement adding and deleting modes
@@ -507,8 +528,25 @@ ${supplementaryInfo || '(追加情報なし)'}
   };
 
 
+  // Authentication screen
+  if (!isAuthenticated) {
+    return (
+      <div className="container" style={{ textAlign: 'center', marginTop: '100px' }}>
+        <h2>Enter Password</h2>
+        <input
+          type="password"
+          value={passwordInput}
+          onChange={handlePasswordInputChange}
+          onKeyDown={handlePasswordKeyDown}
+          style={{ padding: '8px', minWidth: '200px', marginRight: '10px' }}
+        />
+        <button onClick={handlePasswordSubmit}>OK</button>
+      </div>
+    );
+  }
+
   // Render loading or main content based on initial key check
-   if (!keyStatusChecked) {
+  if (!keyStatusChecked) {
     return (
         <div className="container">
              <div className="loading-indicator">
