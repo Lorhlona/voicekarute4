@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 // Define interface for Mode
@@ -44,13 +44,12 @@ const defaultModes: KarteMode[] = [
 
 // localStorage key
 const LOCAL_STORAGE_KEY_MODES = 'voiceKarteModes';
-const LOCAL_STORAGE_KEY_API_KEY = 'voiceKarteApiKey'; // Key for storing API key
 
 
 function App() {
   // State variables
-  // Load API key from localStorage on initial load
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem(LOCAL_STORAGE_KEY_API_KEY) || '');
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // Password gate
+  const [passwordInput, setPasswordInput] = useState('');
   const [isKeySet, setIsKeySet] = useState(false); // Track if API key is successfully set on backend
   const [keyStatusChecked, setKeyStatusChecked] = useState(false); // Track if initial key status check is done
   const [status, setStatus] = useState('APIキーの状態を確認中...'); // Initial status
@@ -86,64 +85,26 @@ function App() {
   const timerIntervalRef = useRef<number | null>(null);
 
   // --- API Key Handling ---
-
-  // Check API key status and auto-set if available in localStorage
   useEffect(() => {
-    const initializeApiKey = async () => {
-      let backendKeyIsSet = false;
+    const checkKeyStatus = async () => {
       try {
-        // 1. Check backend status first
-        const statusResponse = await fetch('/api/key-status');
-        if (statusResponse.ok) {
-          const statusData = await statusResponse.json();
-          backendKeyIsSet = statusData.isKeySet;
+        const res = await fetch('/api/key-status');
+        if (res.ok) {
+          const data = await res.json();
+          setIsKeySet(data.isKeySet);
+          setStatus(data.isKeySet ? '待機中' : 'サーバー側で API キーが設定されていません。');
         } else {
-          console.error('Failed to fetch API key status from backend');
+          setStatus('APIキー確認エラー');
         }
-
-        // 2. If backend key is NOT set, but key exists in localStorage, try setting it
-        const storedApiKey = localStorage.getItem(LOCAL_STORAGE_KEY_API_KEY);
-        if (!backendKeyIsSet && storedApiKey) {
-          console.log("Found API key in localStorage, attempting to set on backend...");
-          setStatus('保存されたAPIキーを設定中...');
-          const setResponse = await fetch('/api/set-api-key', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ apiKey: storedApiKey }),
-          });
-          if (setResponse.ok) {
-            setIsKeySet(true);
-            setStatus('待機中');
-            console.log("Successfully set API key from localStorage on backend.");
-          } else {
-            // Failed to set the stored key (maybe invalid now?)
-            console.error('Failed to set stored API key on backend');
-            localStorage.removeItem(LOCAL_STORAGE_KEY_API_KEY); // Remove invalid key
-            setApiKey(''); // Clear state
-            setIsKeySet(false);
-            setStatus('保存されたAPIキーが無効です。再設定してください。');
-          }
-        } else if (backendKeyIsSet) {
-           // Backend already has a key (maybe set in a previous session or manually)
-           setIsKeySet(true);
-           setStatus('待機中');
-           // Optionally sync localStorage if it's empty or different? For now, assume backend is source of truth if set.
-           // if (!storedApiKey) localStorage.setItem(LOCAL_STORAGE_KEY_API_KEY, 'KEY_SET_ON_BACKEND'); // Placeholder?
-        } else {
-            // No key on backend or in localStorage
-            setIsKeySet(false);
-            setStatus('APIキーを設定してください');
-        }
-
-      } catch (error) {
-        console.error('Error during API key initialization:', error);
+      } catch (err) {
+        console.error('Error checking API key status:', err);
         setStatus('バックエンド接続エラー');
       } finally {
-          setKeyStatusChecked(true); // Mark initialization attempt as complete
+        setKeyStatusChecked(true);
       }
     };
-    initializeApiKey();
-  }, []); // Empty dependency array ensures this runs only once on mount
+    checkKeyStatus();
+  }, []);
 
   // Save modes to localStorage whenever modes state changes
   useEffect(() => {
@@ -192,90 +153,17 @@ function App() {
 
   // TODO: Implement adding and deleting modes
 
-
-  const handleApiKeyChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setApiKey(event.target.value);
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPasswordInput(e.target.value);
   };
 
-  const handleSetApiKey = async () => {
-    if (!apiKey.trim()) {
-      alert('APIキーを入力してください。');
-      return;
-    }
-    setIsLoading(true);
-    setStatus('APIキーを設定中...');
-    try {
-      const response = await fetch('/api/set-api-key', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ apiKey }),
-      });
-      if (response.ok) {
-        localStorage.setItem(LOCAL_STORAGE_KEY_API_KEY, apiKey); // Save key on success
-        setIsKeySet(true);
-        setStatus('待機中');
-        alert('APIキーが設定されました。');
-      } else {
-        // Don't save key if setting failed
-        localStorage.removeItem(LOCAL_STORAGE_KEY_API_KEY); // Remove potentially invalid key
-        let errorMsg = `APIキーの設定に失敗しました: ${response.statusText}`;
-        try {
-            const errorData = await response.json();
-            errorMsg = `APIキーの設定に失敗しました: ${errorData.error || response.statusText}`;
-        } catch (e) {
-            // Ignore if response is not JSON
-        }
-        alert(errorMsg);
-        setIsKeySet(false);
-         setStatus('APIキー設定失敗');
-      }
-    } catch (error) {
-      console.error('Error setting API key:', error);
-      alert('APIキーの設定中にエラーが発生しました。');
-      setIsKeySet(false);
-      setStatus('APIキー設定エラー');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Function to allow changing the API key
-  const handleChangeApiKeyClick = () => {
-    setIsKeySet(false); // Show the input field again
-    setApiKey(''); // Clear the current input field
-    setStatus('新しいAPIキーを入力してください');
-  };
-
-   // Function to clear the API key
-  const handleClearApiKey = async () => {
-    if (!confirm('保存されているAPIキーをクリアしてもよろしいですか？')) {
-        return;
-    }
-    setIsLoading(true);
-    setStatus('APIキーをクリア中...');
-    try {
-        // Clear from backend
-        const response = await fetch('/api/clear-api-key', { method: 'POST' });
-        if (!response.ok) {
-            throw new Error('Failed to clear API key on backend');
-        }
-        // Clear from localStorage and state
-        localStorage.removeItem(LOCAL_STORAGE_KEY_API_KEY);
-        setApiKey('');
-        setIsKeySet(false);
-        setStatus('APIキーを設定してください');
-        alert('APIキーがクリアされました。');
-    } catch (error) {
-        console.error('Error clearing API key:', error);
-        alert('APIキーのクリア中にエラーが発生しました。');
-        // Keep UI state consistent even if backend fails? Or reflect backend state?
-        // For now, assume frontend clear is desired outcome.
-        localStorage.removeItem(LOCAL_STORAGE_KEY_API_KEY);
-        setApiKey('');
-        setIsKeySet(false);
-        setStatus('APIキーのクリアエラー');
-    } finally {
-        setIsLoading(false);
+  // --- Authentication ---
+  const handlePasswordSubmit = () => {
+    if (passwordInput === 'Puppy') {
+      setIsAuthenticated(true);
+      setPasswordInput('');
+    } else {
+      alert('パスワードが違います。');
     }
   };
 
@@ -290,7 +178,7 @@ function App() {
         const response = await fetch('/api/clear-data', { method: 'POST' });
         if (response.ok) {
             alert('保存されている音声ファイルと文字起こしテキストが削除されました。');
-            setStatus(isKeySet ? '待機中' : 'APIキーを設定してください'); // Reset status
+            setStatus(isKeySet ? '待機中' : 'APIキー未設定'); // Reset status
         } else {
             const errorData = await response.json();
             throw new Error(errorData.error || 'Failed to clear data on backend');
@@ -519,39 +407,30 @@ ${supplementaryInfo || '(追加情報なし)'}
     );
   }
 
+  if (!isAuthenticated) {
+    return (
+      <div className="container" style={{ textAlign: 'center', marginTop: '50px' }}>
+        <h1>Voice Karte</h1>
+        <p>パスワードを入力してください</p>
+        <input
+          type="password"
+          value={passwordInput}
+          onChange={handlePasswordChange}
+          style={{ padding: '8px', marginRight: '10px' }}
+        />
+        <button onClick={handlePasswordSubmit}>送信</button>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
        <h1>Voice Karte - AI Transcription & Charting (React)</h1>
 
-       {/* API Key Section - Show input if key is not set */}
-       {!isKeySet && (
-         <div className="section api-key-section">
-            <h2>APIキー設定</h2>
-            <p>Gemini API を使用するために API キーを設定してください。</p>
-            <input
-                type="password" // Use password type for sensitive keys
-                placeholder="Gemini API Key"
-                value={apiKey}
-                onChange={handleApiKeyChange}
-                disabled={isLoading}
-                style={{ marginRight: '10px', padding: '8px', minWidth: '300px' }}
-            />
-            <button onClick={handleSetApiKey} disabled={isLoading || !apiKey.trim()}>
-                {isLoading ? '設定中...' : 'APIキーを設定'}
-            </button>
-         </div>
-       )}
-
-       {/* Show Change/Clear API Key and Clear Data buttons if key is set */}
-       {isKeySet && keyStatusChecked && (
-           <div style={{ textAlign: 'center', marginBottom: '20px', display: 'flex', justifyContent: 'center', gap: '10px', flexWrap: 'wrap' }}>
-               <button onClick={handleChangeApiKeyClick} disabled={isLoading}>
-                   APIキーを変更
-               </button>
-                <button onClick={handleClearApiKey} disabled={isLoading} style={{ backgroundColor: '#6c757d', color: 'white' }}> {/* Adjusted color */}
-                   APIキーをクリア
-                </button>
-                 <button onClick={handleClearData} disabled={isLoading} style={{ backgroundColor: '#dc3545', color: 'white' }}> {/* Danger color */}
+       {/* データクリアボタン */}
+       {keyStatusChecked && (
+           <div style={{ textAlign: 'center', marginBottom: '20px' }}>
+                <button onClick={handleClearData} disabled={isLoading} style={{ backgroundColor: '#dc3545', color: 'white' }}>
                    保存データクリア
                 </button>
            </div>
