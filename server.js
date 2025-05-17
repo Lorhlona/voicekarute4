@@ -35,8 +35,15 @@ ensureDirectoryExists(uploadsDir);
 
 // --- API キー管理 ---
 // サーバー側でAPIキーを保持する変数 (サーバー再起動でリセットされる)
-let serverApiKey = null;
+let serverApiKey = process.env.GEMINI_API_KEY || null;
 let genAIInstance = null; // 初期化されたクライアントを保持 (任意)
+
+if (serverApiKey) {
+    initializeGenAIClient(serverApiKey);
+    console.log('Gemini API key loaded from environment.');
+} else {
+    console.warn('GEMINI_API_KEY environment variable is not set.');
+}
 
 // APIキーを設定する関数 (クライアントを再利用する場合)
 function initializeGenAIClient(apiKey) {
@@ -433,7 +440,7 @@ async function findAvailablePort(startPort, maxAttempts = 10) {
     const availablePort = await findAvailablePort(DEFAULT_PORT);
     app.listen(availablePort, () => {
       console.log(`Backend server listening at http://localhost:${availablePort}`);
-      // APIキーが .env から読み込まれなくなったため、起動時の警告は不要
+      // APIキーは環境変数から読み込まれるため特別な警告は不要
     });
   } catch (error) {
     console.error('Failed to start server:', error.message);
