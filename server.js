@@ -38,6 +38,21 @@ ensureDirectoryExists(uploadsDir);
 let serverApiKey = null;
 let genAIInstance = null; // 初期化されたクライアントを保持 (任意)
 
+// 環境変数から API キーを読み込む
+const envApiKey = process.env.GEMINI_API_KEY;
+if (envApiKey) {
+    serverApiKey = envApiKey;
+    const initialized = initializeGenAIClient(serverApiKey);
+    if (initialized) {
+        console.log('Gemini API key loaded from environment.');
+    } else {
+        console.error('Failed to initialize Gemini client with environment key.');
+        serverApiKey = null;
+    }
+} else {
+    console.warn('GEMINI_API_KEY environment variable is not set.');
+}
+
 // APIキーを設定する関数 (クライアントを再利用する場合)
 function initializeGenAIClient(apiKey) {
     try {
