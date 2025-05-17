@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 // Define interface for Mode
@@ -60,6 +60,9 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // Simple authentication state for password gate
+  const [authenticated, setAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
   // Mode States
   const [modes, setModes] = useState<KarteMode[]>(() => {
     // Load modes from localStorage or use defaults
@@ -188,6 +191,15 @@ function App() {
   const handleEditingModeChange = (field: keyof KarteMode, value: string) => {
     if (!editingMode) return;
     setEditingMode(prev => prev ? { ...prev, [field]: value } : null);
+  };
+
+  const handlePasswordSubmit = () => {
+    if (passwordInput === 'Puppy') {
+      setAuthenticated(true);
+      setPasswordInput('');
+    } else {
+      alert('パスワードが違います');
+    }
   };
 
   // TODO: Implement adding and deleting modes
@@ -507,15 +519,31 @@ ${supplementaryInfo || '(追加情報なし)'}
   };
 
 
-  // Render loading or main content based on initial key check
-   if (!keyStatusChecked) {
+  // Show password prompt if not authenticated
+  if (!authenticated) {
     return (
-        <div className="container">
-             <div className="loading-indicator">
-                <div className="spinner"></div>
-                <p>APIキーの状態を確認中...</p>
-            </div>
+      <div className="container">
+        <h1>パスワードを入力</h1>
+        <input
+          type="password"
+          value={passwordInput}
+          onChange={(e) => setPasswordInput(e.target.value)}
+          style={{ marginRight: '10px', padding: '8px' }}
+        />
+        <button onClick={handlePasswordSubmit}>入場</button>
+      </div>
+    );
+  }
+
+  // Render loading indicator until API key status is checked
+  if (!keyStatusChecked) {
+    return (
+      <div className="container">
+        <div className="loading-indicator">
+          <div className="spinner"></div>
+          <p>APIキーの状態を確認中...</p>
         </div>
+      </div>
     );
   }
 
