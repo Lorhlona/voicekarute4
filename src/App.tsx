@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
 // Define interface for Mode
@@ -53,6 +53,8 @@ function App() {
   const [apiKey, setApiKey] = useState(() => localStorage.getItem(LOCAL_STORAGE_KEY_API_KEY) || '');
   const [isKeySet, setIsKeySet] = useState(false); // Track if API key is successfully set on backend
   const [keyStatusChecked, setKeyStatusChecked] = useState(false); // Track if initial key status check is done
+  const [authenticated, setAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
   const [status, setStatus] = useState('APIキーの状態を確認中...'); // Initial status
   const [transcript, setTranscript] = useState('');
   const [supplementaryInfo, setSupplementaryInfo] = useState(''); // State for additional info
@@ -195,6 +197,14 @@ function App() {
 
   const handleApiKeyChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setApiKey(event.target.value);
+  };
+
+  const handlePasswordSubmit = () => {
+    if (passwordInput === 'Puppy') {
+      setAuthenticated(true);
+    } else {
+      alert('パスワードが違います。');
+    }
   };
 
   const handleSetApiKey = async () => {
@@ -507,15 +517,32 @@ ${supplementaryInfo || '(追加情報なし)'}
   };
 
 
-  // Render loading or main content based on initial key check
-   if (!keyStatusChecked) {
+  // Password gate
+  if (!authenticated) {
     return (
-        <div className="container">
-             <div className="loading-indicator">
-                <div className="spinner"></div>
-                <p>APIキーの状態を確認中...</p>
-            </div>
+      <div className="container">
+        <h1>Voice Karte - AI Transcription & Charting (React)</h1>
+        <div className="section">
+          <input
+            type="password"
+            value={passwordInput}
+            onChange={(e) => setPasswordInput(e.target.value)}
+          />
+          <button onClick={handlePasswordSubmit}>送信</button>
         </div>
+      </div>
+    );
+  }
+
+  // Render loading or main content based on initial key check
+  if (!keyStatusChecked) {
+    return (
+      <div className="container">
+        <div className="loading-indicator">
+          <div className="spinner"></div>
+          <p>APIキーの状態を確認中...</p>
+        </div>
+      </div>
     );
   }
 
