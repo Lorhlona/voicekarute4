@@ -60,6 +60,8 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
   // Mode States
   const [modes, setModes] = useState<KarteMode[]>(() => {
     // Load modes from localStorage or use defaults
@@ -84,6 +86,15 @@ function App() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const timerIntervalRef = useRef<number | null>(null);
+
+  // --- Simple Password Authentication ---
+  const handlePasswordSubmit = () => {
+    if (passwordInput === 'Puppy') {
+      setIsAuthenticated(true);
+    } else {
+      alert('パスワードが違います');
+    }
+  };
 
   // --- API Key Handling ---
 
@@ -507,8 +518,24 @@ ${supplementaryInfo || '(追加情報なし)'}
   };
 
 
+  // Show password screen first
+  if (!isAuthenticated) {
+    return (
+      <div className="container" style={{ textAlign: 'center' }}>
+        <h1>Enter Password</h1>
+        <input
+          type="password"
+          value={passwordInput}
+          onChange={(e) => setPasswordInput(e.target.value)}
+          style={{ padding: '8px', marginRight: '10px' }}
+        />
+        <button onClick={handlePasswordSubmit}>ログイン</button>
+      </div>
+    );
+  }
+
   // Render loading or main content based on initial key check
-   if (!keyStatusChecked) {
+  if (!keyStatusChecked) {
     return (
         <div className="container">
              <div className="loading-indicator">

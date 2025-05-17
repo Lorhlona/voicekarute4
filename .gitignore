@@ -123,4 +123,5 @@ dist
 # Uploads and Transcripts (specific to this project)
 /uploads/
 /transcripts/
-/dist/node/ # Added for tsconfig.node.json output
+/dist/node/
+# Added for tsconfig.node.json output
