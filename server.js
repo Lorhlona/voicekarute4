@@ -35,8 +35,16 @@ ensureDirectoryExists(uploadsDir);
 
 // --- API キー管理 ---
 // サーバー側でAPIキーを保持する変数 (サーバー再起動でリセットされる)
-let serverApiKey = null;
+// 起動時に環境変数から読み込み
+let serverApiKey = process.env.GEMINI_API_KEY || null;
 let genAIInstance = null; // 初期化されたクライアントを保持 (任意)
+
+if (serverApiKey) {
+    initializeGenAIClient(serverApiKey);
+    console.log("Gemini API key loaded from environment.");
+} else {
+    console.warn("Gemini API key not found in environment.");
+}
 
 // APIキーを設定する関数 (クライアントを再利用する場合)
 function initializeGenAIClient(apiKey) {
