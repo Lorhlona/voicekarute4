@@ -166,7 +166,8 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
          return res.status(503).json({ error: 'Gemini API client could not be initialized with the provided key.' });
     }
     // Use the unified model name
-    const currentTranscriptionModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
+    // const currentTranscriptionModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
+    const currentTranscriptionModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-05-06" });
 
 
     if (!req.file) {
@@ -324,7 +325,8 @@ app.post('/api/generate-karte', async (req, res) => {
          return res.status(503).json({ error: 'Gemini API client could not be initialized with the provided key.' });
      }
      // Use the unified model name
-    const currentGenerationModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
+    //const currentGenerationModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
+    const currentGenerationModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-05-06" });
 
     // Receive combinedText and systemPrompt from the frontend
     const { combinedText, systemPrompt } = req.body; // systemPrompt を受け取る
