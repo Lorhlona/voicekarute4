@@ -13,7 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const DEFAULT_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000; // Default port
+const DEFAULT_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3004; // ポートを3004に変更
 
 // --- ディレクトリ作成 ---
 const transcriptsDir = path.join(__dirname, 'transcripts');

@@ -5,11 +5,10 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   server: {
-    port: 3004, // ポート3004で起動するように設定
-    // Configure proxy to forward API requests to the backend server (running on port 3000 by default)
+    // Configure proxy to forward API requests to the backend server (running on port 3004)
     proxy: {
       '/api': {
-        target: 'http://localhost:3000', // Assuming your Express server runs on port 3000
+        target: 'http://localhost:3004', // Express server runs on port 3004
         changeOrigin: true,
         // Optional: rewrite path if needed, e.g., remove /api prefix
         // rewrite: (path) => path.replace(/^\/api/, '')
