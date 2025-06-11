@@ -1,3 +1,4 @@
+
 # Logs
 logs
 *.log
@@ -124,3 +125,5 @@ dist
 /uploads/
 /transcripts/
 /dist/node/ # Added for tsconfig.node.json output
+VITE_BACKEND_PORT=3004
+.env.local

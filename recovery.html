@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>Voice Karte 設定復元ツール</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+        }
+        .section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            font-family: monospace;
+        }
+        .success {
+            color: green;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <h1>Voice Karte 設定復元ツール</h1>
+    
+    <div class="section">
+        <h2>1. 保存されているデータを確認</h2>
+        <p>以下のボタンをクリックして、localStorage に保存されているデータを確認してください。</p>
+        <button onclick="checkData()">データを確認</button>
+        <pre id="dataDisplay"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>2. すべてのlocalStorageキーを検索</h2>
+        <p>localStorage内のすべてのキーを確認します。</p>
+        <button onclick="searchAllKeys()">すべてのキーを検索</button>
+        <pre id="allKeysDisplay"></pre>
+    </div>
+    
+    <div class="section">
+        <h2>3. 手動でデータを復元</h2>
+        <p>以前のカスタム設定を覚えている場合は、ここに入力して復元できます。</p>
+        <textarea id="customData" placeholder='[{"id":"shoshin","title":"初診","systemPrompt":"カスタムプロンプト..."}]'></textarea>
+        <br>
+        <button onclick="restoreCustomData()">カスタムデータを復元</button>
+        <div id="customResult"></div>
+    </div>
+    
+    <script>
+        function checkData() {
+            const display = document.getElementById('dataDisplay');
+            const data = {
+                'voiceKarteModes': localStorage.getItem('voiceKarteModes'),
+                'voiceKarteModes_v2': localStorage.getItem('voiceKarteModes_v2'),
+                'voiceKarteApiKey': localStorage.getItem('voiceKarteApiKey') ? '***設定済み***' : null
+            };
+            display.textContent = JSON.stringify(data, null, 2);
+        }
+        
+        function searchAllKeys() {
+            const display = document.getElementById('allKeysDisplay');
+            const allData = {};
+            
+            // Get all localStorage keys
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                const value = localStorage.getItem(key);
+                
+                // Mask API key for security
+                if (key.includes('ApiKey')) {
+                    allData[key] = value ? '***設定済み***' : null;
+                } else {
+                    allData[key] = value;
+                }
+            }
+            
+            display.textContent = JSON.stringify(allData, null, 2);
+        }
+        
+        function restoreCustomData() {
+            const result = document.getElementById('customResult');
+            const customData = document.getElementById('customData').value.trim();
+            
+            if (!customData) {
+                result.innerHTML = '<p class="error">✗ データを入力してください。</p>';
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(customData);
+                if (Array.isArray(parsed)) {
+                    localStorage.setItem('voiceKarteModes', customData);
+                    result.innerHTML = '<p class="success">✓ カスタムデータを復元しました。Voice Karteアプリをリロードしてください。</p>';
+                } else {
+                    result.innerHTML = '<p class="error">✗ データは配列形式である必要があります。</p>';
+                }
+            } catch (e) {
+                result.innerHTML = '<p class="error">✗ 無効なJSONデータです: ' + e.message + '</p>';
+            }
+        }
+        
+        // 初期表示
+        checkData();
+    </script>
+</body>
+</html>

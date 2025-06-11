@@ -43,7 +43,7 @@ const defaultModes: KarteMode[] = [
 ];
 
 // localStorage key
-const LOCAL_STORAGE_KEY_MODES = 'voiceKarteModes';
+const LOCAL_STORAGE_KEY_MODES = 'voiceKarteModes'; // Restored to original key
 const LOCAL_STORAGE_KEY_API_KEY = 'voiceKarteApiKey'; // Key for storing API key
 
 
@@ -65,15 +65,30 @@ function App() {
     // Load modes from localStorage or use defaults
     const savedModes = localStorage.getItem(LOCAL_STORAGE_KEY_MODES);
     try {
-        const parsedModes = savedModes ? JSON.parse(savedModes) : defaultModes;
-        // Basic validation to ensure it's an array of objects with expected keys
-        if (Array.isArray(parsedModes) && parsedModes.every(m => m && typeof m === 'object' && 'id' in m && 'title' in m && 'systemPrompt' in m)) {
-            return parsedModes;
+        if (savedModes) {
+            const parsedModes = JSON.parse(savedModes);
+            // Basic validation to ensure it's an array of objects with expected keys
+            if (Array.isArray(parsedModes) && parsedModes.every(m => m && typeof m === 'object' && 'id' in m && 'title' in m && 'systemPrompt' in m)) {
+                // Check if we need to add missing default modes
+                const savedModeIds = parsedModes.map(m => m.id);
+                const missingDefaultModes = defaultModes.filter(dm => !savedModeIds.includes(dm.id));
+                
+                // If there are missing modes, add them
+                if (missingDefaultModes.length > 0) {
+                    console.log('Adding missing default modes:', missingDefaultModes.map(m => m.title));
+                    return [...parsedModes, ...missingDefaultModes];
+                }
+                
+                return parsedModes;
+            }
         }
     } catch (e) {
         console.error("Failed to parse modes from localStorage", e);
     }
-    return defaultModes; // Fallback to defaults
+    
+    // No saved modes or invalid data - use defaults
+    console.log('Using default modes');
+    return defaultModes;
   });
   const [selectedModeId, setSelectedModeId] = useState<string>(modes[0]?.id || ''); // Default to first mode
   const [editingMode, setEditingMode] = useState<KarteMode | null>(null); // Mode being edited
@@ -655,6 +670,65 @@ ${supplementaryInfo || '(追加情報なし)'}
                     </React.Fragment>
                 ))}
                  {/* TODO: Add button to add a new mode */}
+            </div>
+            
+            {/* Settings Export/Import */}
+            <div style={{ textAlign: 'center', marginTop: '10px', marginBottom: '10px' }}>
+                <button
+                    onClick={() => {
+                        const data = {
+                            modes: modes,
+                            exportDate: new Date().toISOString()
+                        };
+                        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `voicekarte-settings-${new Date().toISOString().split('T')[0]}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                    }}
+                    style={{ marginRight: '10px', fontSize: '0.9em' }}
+                    title="現在の設定をファイルに保存"
+                >
+                    設定をエクスポート
+                </button>
+                <input
+                    type="file"
+                    accept=".json"
+                    id="importSettings"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                            const reader = new FileReader();
+                            reader.onload = (event) => {
+                                try {
+                                    const data = JSON.parse(event.target?.result as string);
+                                    if (data.modes && Array.isArray(data.modes)) {
+                                        setModes(data.modes);
+                                        localStorage.setItem(LOCAL_STORAGE_KEY_MODES, JSON.stringify(data.modes));
+                                        alert('設定をインポートしました');
+                                    } else {
+                                        alert('無効なファイル形式です');
+                                    }
+                                } catch (error) {
+                                    alert('ファイルの読み込みに失敗しました');
+                                }
+                            };
+                            reader.readAsText(file);
+                        }
+                        // Reset input
+                        e.target.value = '';
+                    }}
+                />
+                <button
+                    onClick={() => document.getElementById('importSettings')?.click()}
+                    style={{ fontSize: '0.9em' }}
+                    title="保存した設定ファイルを読み込み"
+                >
+                    設定をインポート
+                </button>
             </div>
 
              {/* Generate Button (now uses selected mode) */}

@@ -6,14 +6,14 @@ import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/ge
 import fs from 'fs/promises'; // Use promises version of fs
 import path from 'path';
 import { fileURLToPath } from 'url';
-import net from 'net'; // Import net module for port checking
+import { findAvailablePort } from './utils/portFinder.js';
 
 // --- 初期設定 ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const DEFAULT_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3004; // ポートを3004に変更
+const BASE_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3004; // ベースポート
 
 // --- ディレクトリ作成 ---
 const transcriptsDir = path.join(__dirname, 'transcripts');
@@ -166,7 +166,7 @@ app.post('/api/transcribe', upload.single('audio'), async (req, res) => {
          return res.status(503).json({ error: 'Gemini API client could not be initialized with the provided key.' });
     }
     // Use the unified model name
-    const currentTranscriptionModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
+    const currentTranscriptionModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-06-05" });
 
 
     if (!req.file) {
@@ -324,7 +324,7 @@ app.post('/api/generate-karte', async (req, res) => {
          return res.status(503).json({ error: 'Gemini API client could not be initialized with the provided key.' });
      }
      // Use the unified model name
-    const currentGenerationModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-03-25" });
+    const currentGenerationModel = currentGenAI.getGenerativeModel({ model: "gemini-2.5-pro-preview-06-05" });
 
     // Receive combinedText and systemPrompt from the frontend
     const { combinedText, systemPrompt } = req.body; // systemPrompt を受け取る
@@ -399,44 +399,59 @@ app.post('/api/generate-karte', async (req, res) => {
 
 
 // --- Port Availability Check ---
-// Function to check if a port is available
-function isPortAvailable(port) {
-  return new Promise((resolve) => {
-    const server = net.createServer();
-    server.once('error', (err) => {
-      resolve(err.code !== 'EADDRINUSE'); // Resolve true if error is NOT EADDRINUSE
-    });
-    server.once('listening', () => {
-      server.close(() => resolve(true)); // Port is available
-    });
-    server.listen(port, '127.0.0.1'); // Listen on localhost only for check
-  });
-}
-
-// Function to find an available port starting from a given port
-async function findAvailablePort(startPort, maxAttempts = 10) {
-  let port = startPort;
-  for (let i = 0; i < maxAttempts; i++) {
-    if (await isPortAvailable(port)) {
-      return port;
-    }
-    console.warn(`Port ${port} is in use, trying next port...`);
-    port++;
-  }
-  throw new Error(`Could not find an available port after ${maxAttempts} attempts starting from ${startPort}.`);
-}
+// The port checking functions have been moved to utils/portFinder.js
 
 // --- サーバー起動 ---
-// Start the server after finding an available port
+// Start the server with automatic port detection
 (async () => {
-  try {
-    const availablePort = await findAvailablePort(DEFAULT_PORT);
-    app.listen(availablePort, () => {
-      console.log(`Backend server listening at http://localhost:${availablePort}`);
-      // APIキーが .env から読み込まれなくなったため、起動時の警告は不要
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error.message);
-    process.exit(1); // Exit if server cannot start
+  let attempts = 0;
+  const maxAttempts = 10;
+  
+  while (attempts < maxAttempts) {
+    try {
+      // Try to find an available port
+      const port = BASE_PORT + attempts;
+      
+      const server = app.listen(port);
+      
+      await new Promise((resolve, reject) => {
+        server.once('listening', async () => {
+          console.log(`Backend server listening at http://localhost:${port}`);
+          console.log(`Frontend will proxy API requests to port ${port}`);
+          
+          // Write port to file if PORT_FILE env var is set
+          if (process.env.PORT_FILE) {
+            try {
+              await fs.writeFile(process.env.PORT_FILE, port.toString());
+            } catch (err) {
+              console.error('Failed to write port file:', err);
+            }
+          }
+          
+          resolve();
+        });
+        
+        server.once('error', (error) => {
+          if (error.code === 'EADDRINUSE') {
+            console.log(`Port ${port} is already in use, trying next port...`);
+            server.close();
+            reject(error);
+          } else {
+            console.error('Server error:', error);
+            process.exit(1);
+          }
+        });
+      });
+      
+      // If we get here, server started successfully
+      break;
+      
+    } catch (error) {
+      attempts++;
+      if (attempts >= maxAttempts) {
+        console.error(`Failed to find an available port after ${maxAttempts} attempts`);
+        process.exit(1);
+      }
+    }
   }
 })();
